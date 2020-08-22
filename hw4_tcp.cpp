@@ -18,7 +18,7 @@ extern unsigned int getIpv4Address();
 
 extern unsigned int getServerIpv4Address();
 
-// 定义TCPhead结构体，方便操作
+// TCP header info
 typedef struct TCPhead
 {
 	unsigned short srcPort;
@@ -33,7 +33,7 @@ typedef struct TCPhead
 	char data[100];
 };
 
-// 本地的TCB状态信息，TCB里所有数据均为小端序
+// Transmission Control Block, data stored in little endian
 typedef struct TCB
 {
 	unsigned int srcAddr;
@@ -48,18 +48,17 @@ typedef struct TCB
 };
 
 
-//TCB按链表形式组织
+// linked list for transmisssion control block
 typedef struct TCBnode
 {
 	TCB *current;
 	struct TCBnode *next;
 };
 
-// TCB链表与当前操作的TCB
 struct TCBnode *TCBlist;
 struct TCB *currentTCB;
 
-// 定义TCP连接的有限状态机
+// TCP status 
 enum status
 {
 	CLOSED,
@@ -70,15 +69,13 @@ enum status
 	TIME_WAIT
 };
 
-//全局变量
 int gSrcPort = 2005;
 int gDstPort = 2006;
 int gSeqNum = 1;
 int gAckNum = 0;
 int socknum = 5;
 
-
-//统一按小端法处理，基于之前实验的函数，对服务器的捎带确认做了点处理
+// calculate checkSum, compute in little endian
 unsigned int getchecksum(char *pBuffer, unsigned int srcAddr, unsigned int dstAddr, unsigned short len, char* data)
 {
 	TCPhead *head = (TCPhead *)pBuffer;
@@ -90,12 +87,14 @@ unsigned int getchecksum(char *pBuffer, unsigned int srcAddr, unsigned int dstAd
 	}
 	unsigned int sum = 0;
 	unsigned short result;
-	//伪首部
+	// ckecksum for psudo-header
 	sum += (srcAddr >> 16) + (srcAddr & 0xffff);
 	sum += (dstAddr >> 16) + (dstAddr & 0xffff);
-	sum += 6;		//传输协议号
-	sum += 0x14;	//长度
-	//真头部
+	// checksum for protocol number
+	sum += 6;
+	// checksum for length
+	sum += 0x14;
+	// checksum for real header
 	for (int i = 0; i < 10; i++)
 	{
 		if (i != 8)
@@ -104,7 +103,7 @@ unsigned int getchecksum(char *pBuffer, unsigned int srcAddr, unsigned int dstAd
 			sum += (int)((unsigned char)pBuffer[2 * i + 1]);
 		}
 	}
-	//对TCP数据进行校验
+	// package data verification
 	if (head->flag == PACKET_TYPE_DATA || flag == 1)
 	{
 		sum += len;
@@ -127,16 +126,15 @@ unsigned int getchecksum(char *pBuffer, unsigned int srcAddr, unsigned int dstAd
 			}
 		}
 	}
-	//高16位不为0，反复将高16位与低16位相加
 	while ((sum & 0xffff0000) != 0)
 		sum = (sum & 0xffff) + ((sum >> 16) & 0xffff);
 	result = sum;
-	//结果取反即为校验和
+	// negate result
 	return htons(~result);
 }
 
 /*
-* 按照sockfd寻找TCB
+* find transmission control block by socket descriptor
 */
 int getSockfd(int sockfd)
 {
@@ -154,7 +152,7 @@ int getSockfd(int sockfd)
 }
 
 /*
-* 接收tcp分组的函数，srcAddr和dstAddr为大端序
+* accept tcp packet input, update TCB status
 */
 int stud_tcp_input(char *pBuffer, unsigned short len, unsigned int srcAddr, unsigned int dstAddr)
 {
@@ -171,13 +169,13 @@ int stud_tcp_input(char *pBuffer, unsigned short len, unsigned int srcAddr, unsi
 		seqAdd = 0;
 	else if (len > 20)
 		seqAdd = len - 20;
-	//检查ack与seq是否匹配
+	// check whether ack matches seq
 	if (header->ackNum != (currentTCB->seq + seqAdd))
 	{
 		tcp_DiscardPkt(pBuffer, STUD_TCP_TEST_SEQNO_ERROR);
 		return -1;
 	}
-	//按照TCB的state更新状态
+	// update TCB status
 	switch (currentTCB->state)
 	{
 	case SYN_SENT:
@@ -237,7 +235,7 @@ int stud_tcp_input(char *pBuffer, unsigned short len, unsigned int srcAddr, unsi
 }
 
 /*
-* 封装分组并发送，两个地址为小端序
+* tcp encapsulation and transmission
 */
 void stud_tcp_output(char *pData, unsigned short len, unsigned char flag, unsigned short srcPort, unsigned short dstPort, unsigned int srcAddr, unsigned int dstAddr)
 {
@@ -278,7 +276,7 @@ void stud_tcp_output(char *pData, unsigned short len, unsigned char flag, unsign
 	TCPhead *newHead = new TCPhead;
 	for (int i = 0; i < len; i++)
 		newHead->data[i] = pData[i];
-	//转换字节序并计算校验和
+	// calculate checkSum in correct byte order
 	newHead->srcPort = htons(srcPort);
 	newHead->dstPort = htons(dstPort);
 	newHead->seqNum = htonl(currentTCB->seq);
@@ -292,11 +290,11 @@ void stud_tcp_output(char *pData, unsigned short len, unsigned char flag, unsign
 }
 
 /*
-* 初始化socket，创建新TCB，分配sockfd等
+* initialize socket，create new TCB，distribute socket descriptor
 */
 int stud_tcp_socket(int domain, int type, int protocol)
 {
-	if (domain != AF_INET || type != SOCK_STREAM || protocol != IPPROTO_TCP)	//检查参数是否合法
+	if (domain != AF_INET || type != SOCK_STREAM || protocol != IPPROTO_TCP)
 		return -1;
 	currentTCB = new TCB;
 	if (TCBlist == NULL)
@@ -324,7 +322,7 @@ int stud_tcp_socket(int domain, int type, int protocol)
 }
 
 /*
-* 创建连接，三次握手
+* create tcp connection, Three-way Handshake
 */
 int stud_tcp_connect(int sockfd, struct sockaddr_in *addr, int addrlen)
 {
@@ -352,8 +350,8 @@ int stud_tcp_connect(int sockfd, struct sockaddr_in *addr, int addrlen)
 }
 
 /*
-* 发送数据，等待ACK
-* */
+* send packet and wait for response (ACK)
+*/
 int stud_tcp_send(int sockfd, const unsigned char *pData, unsigned short datalen, int flags)
 {
 	if (getSockfd(sockfd) == -1)
@@ -379,8 +377,8 @@ int stud_tcp_send(int sockfd, const unsigned char *pData, unsigned short datalen
 }
 
 /*
-* 接收数据，要发送ACK
-* */
+* send ACK after receiving packet
+*/
 int stud_tcp_recv(int sockfd, unsigned char *pData, unsigned short datalen, int flags)
 {
 	if (getSockfd(sockfd) == -1)
@@ -407,8 +405,8 @@ int stud_tcp_recv(int sockfd, unsigned char *pData, unsigned short datalen, int 
 }
 
 /*
-* 关闭连接，状态逐步转换
-* */
+* close connection, update status
+*/
 int stud_tcp_close(int sockfd)
 {
 	TCBnode *temp = TCBlist;
