@@ -26,36 +26,36 @@ typedef struct stud_route_msg
 map<int, int> routeTable;
 // implemented by students
 
-//计算校验和函数
+// calculate checksum 
 unsigned short checkSum(char *pBuffer)
 {
 	int sum = 0;
 	unsigned short result;
 	for (int i = 0; i < 10; i++)
 	{
-		if (i != 5)	//校验和自己不加
+		if (i != 5)
 		{
 			sum += (int)((unsigned char)pBuffer[2 * i] << 8);
 			sum += (int)((unsigned char)pBuffer[2 * i + 1]);
 		}
 	}
-	//转换网络字节序
+	// transform to network-byte order(big endian)
+	// keep add lower 16 bit and higher 16 bits until high 16 bits become 0 
 	while ((sum & 0xffff0000) != 0)
 		sum = (sum & 0xffff) + ((sum >> 16) & 0xffff);
-	//高16位不为0，反复将高16位与低16位相加
 	result = sum;
+	// negate result
 	return htons(~result);
-	//结果取反即为校验和
 }
 
-//初始化路由表
+// init routing table
 void stud_Route_Init()
 {
 	routeTable.clear();
 	return;
 }
 
-//更新路由表
+// update routing table
 void stud_route_add(stud_route_msg *proute)
 {
 	int masklen = ntohl(proute->masklen);
@@ -65,33 +65,38 @@ void stud_route_add(stud_route_msg *proute)
 	return;
 }
 
-
+// IPv4 packet routing and forwarding
 int stud_fwd_deal(char *pBuffer, int length)
 {
 	int ttl = (int)pBuffer[8];
 	int dest = ntohl(*(unsigned int *)(pBuffer + 16));
-	if (dest == getIpv4Address())	//目的地是本机
+	// localhost is destination
+	if (dest == getIpv4Address())
 	{
 		fwd_LocalRcv(pBuffer, length);
 		return 0;
 	}
-	if (ttl == 0)	//有效时间用完
+	// use up Time-to-live, discard package
+	if (ttl == 0)
 	{
 		fwd_DiscardPkt(pBuffer, STUD_FORWARD_TEST_TTLERROR);
 		return 1;
 	}
 	map<int, int>::iterator p = routeTable.find(dest);
-	if (p != routeTable.end()) 	//找到相应表项
+	// entry found in routing table
+	if (p != routeTable.end())
 	{
 		char *sendBuffer = new char[length];
 		memcpy(sendBuffer, pBuffer, length);
-		sendBuffer[8]--;			//TTL-1
-		unsigned int sendSum = checkSum(sendBuffer);	//重新计算校验和
+		// decrement ttl 
+		sendBuffer[8]--;			
+		// need to re-calculate checkSum
+		unsigned int sendSum = checkSum(sendBuffer);
 		*((unsigned short *)(sendBuffer + 10)) = sendSum;
 		fwd_SendtoLower(sendBuffer, length, p->second);
 		return 0;
 	}
-	//未找到相应表项
+	// discard package if entry is not found in routing table
 	fwd_DiscardPkt(pBuffer, STUD_FORWARD_TEST_NOROUTE);
 	return 1;
 }
