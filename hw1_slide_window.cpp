@@ -25,7 +25,7 @@ typedef struct frame_cache {
 	int size;
 };
 /*
-* 停等协议测试函数
+* test function for Stop-and–Wait slide window protocol
 */
 int stud_slide_window_stop_and_wait(char *pBuffer, int bufferSize, UINT8 messageType)
 {
@@ -70,7 +70,7 @@ int stud_slide_window_stop_and_wait(char *pBuffer, int bufferSize, UINT8 message
 }
 
 /*
-* 回退n帧测试函数
+* test function for go back N slide window protocol
 */
 int stud_slide_window_back_n_frame(char *pBuffer, int bufferSize, UINT8 messageType)
 {
@@ -117,7 +117,7 @@ int stud_slide_window_back_n_frame(char *pBuffer, int bufferSize, UINT8 messageT
 }
 
 /*
-* 选择性重传测试函数
+* test function for selective repeat slide window protocol
 */
 int stud_slide_window_choice_frame_resend(char *pBuffer, int bufferSize, UINT8 messageType)
 {
